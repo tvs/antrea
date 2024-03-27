@@ -16,10 +16,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
 
@@ -340,6 +342,58 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			} else {
 				require.Error(t, err, tc.expectedErr)
 			}
+		})
+	}
+}
+
+func TestOptionsUnmarshal(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedErr string
+		mutator     func(f *os.File) error
+	}{
+		{
+			name: "ignores unknown fields",
+			mutator: func(f *os.File) error {
+				cfg := &agentconfig.AgentConfig{}
+				c, err := yaml.Marshal(cfg)
+				if err != nil {
+					return err
+				}
+
+				if _, err := f.Write(c); err != nil {
+					f.Close()
+					return fmt.Errorf("failed to write base config: %w", err)
+				}
+
+				if _, err := f.Write([]byte("foo: bar")); err != nil {
+					f.Close()
+					return fmt.Errorf("failed to write extra field: %w", err)
+				}
+
+				if err := f.Close(); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.CreateTemp("", "antrea-cfg-test")
+			require.NoError(t, err)
+			defer os.Remove(f.Name())
+
+			o := &Options{
+				configFile: f.Name(),
+			}
+
+			err = tc.mutator(f)
+			require.NoError(t, err)
+
+			err = o.loadConfigFromFile()
+			require.NoError(t, err)
 		})
 	}
 }

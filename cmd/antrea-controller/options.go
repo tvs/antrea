@@ -164,7 +164,7 @@ func (o *Options) loadConfigFromFile() error {
 		return err
 	}
 
-	return yaml.UnmarshalStrict(data, &o.config)
+	return yaml.Unmarshal(data, &o.config)
 }
 
 func (o *Options) setDefaults() {

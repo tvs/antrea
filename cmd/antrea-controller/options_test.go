@@ -15,9 +15,12 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v2"
 
 	"antrea.io/antrea/pkg/apis"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
@@ -171,6 +174,58 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 			} else {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			}
+		})
+	}
+}
+
+func TestOptionsUnmarshal(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedErr string
+		mutator     func(f *os.File) error
+	}{
+		{
+			name: "ignores unknown fields",
+			mutator: func(f *os.File) error {
+				cfg := &controllerconfig.ControllerConfig{}
+				c, err := yaml.Marshal(cfg)
+				if err != nil {
+					return err
+				}
+
+				if _, err := f.Write(c); err != nil {
+					f.Close()
+					return fmt.Errorf("failed to write base config: %w", err)
+				}
+
+				if _, err := f.Write([]byte("foo: bar")); err != nil {
+					f.Close()
+					return fmt.Errorf("failed to write extra field: %w", err)
+				}
+
+				if err := f.Close(); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.CreateTemp("", "antrea-cfg-test")
+			assert.NoError(t, err)
+			defer os.Remove(f.Name())
+
+			o := &Options{
+				configFile: f.Name(),
+			}
+
+			err = tc.mutator(f)
+			assert.NoError(t, err)
+
+			err = o.loadConfigFromFile()
+			assert.NoError(t, err)
 		})
 	}
 }

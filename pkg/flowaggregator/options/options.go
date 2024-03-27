@@ -46,7 +46,7 @@ type Options struct {
 
 func LoadConfig(configBytes []byte) (*Options, error) {
 	var opt Options
-	if err := yaml.UnmarshalStrict(configBytes, &opt.Config); err != nil {
+	if err := yaml.Unmarshal(configBytes, &opt.Config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
 	flowaggregatorconfig.SetConfigDefaults(opt.Config)
